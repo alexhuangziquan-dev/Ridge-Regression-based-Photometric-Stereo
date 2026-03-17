@@ -1,0 +1,759 @@
+% !TEX program = xelatex
+% ============================================================
+%  直接粘贴至 Overleaf main.tex，Compiler 选 XeLaTeX
+%  已针对免费套餐编译超时问题精简：
+%    - tcolorbox(skins) → mdframed（去除 TikZ 依赖）
+%    - 移除 fontawesome5
+%    - 修复 headheight / hyperref 警告
+% ============================================================
+
+\begin{filecontents*}{references.bib}
+@article{woodham1980photometric,
+  title     = {Photometric method for determining surface orientation
+               from multiple images},
+  author    = {Woodham, Robert J.},
+  journal   = {Optical Engineering},
+  volume    = {19}, number = {1}, pages = {139--144}, year = {1980},
+  doi       = {10.1117/12.7972479},
+  url       = {https://doi.org/10.1117/12.7972479}
+}
+@article{frankot1988method,
+  title     = {A method for enforcing integrability in shape from
+               shading algorithms},
+  author    = {Frankot, Robert T. and Chellappa, Rama},
+  journal   = {IEEE Trans.\ Pattern Anal.\ Mach.\ Intell.},
+  volume    = {10}, number = {4}, pages = {439--451}, year = {1988},
+  doi       = {10.1109/34.3910},
+  url       = {https://doi.org/10.1109/34.3910}
+}
+@article{simchony1990direct,
+  title     = {Direct analytical methods for solving {Poisson} equations
+               in computer vision problems},
+  author    = {Simchony, Tal and Chellappa, Rama and Shao, Min},
+  journal   = {IEEE Trans.\ Pattern Anal.\ Mach.\ Intell.},
+  volume    = {12}, number = {5}, pages = {435--446}, year = {1990},
+  doi       = {10.1109/34.55108},
+  url       = {https://doi.org/10.1109/34.55108}
+}
+@inproceedings{johnson2009retrographic,
+  title     = {Retrographic sensing for the measurement of surface
+               texture and shape},
+  author    = {Johnson, Micah K. and Adelson, Edward H.},
+  booktitle = {CVPR}, pages = {1070--1077}, year = {2009},
+  doi       = {10.1109/CVPR.2009.5206534},
+  url       = {https://doi.org/10.1109/CVPR.2009.5206534}
+}
+@article{yuan2017gelsight,
+  title     = {{GelSight}: High-resolution robot tactile sensors for
+               estimating geometry and force},
+  author    = {Yuan, Wenzhen and Dong, Siyuan and Adelson, Edward H.},
+  journal   = {Sensors},
+  volume    = {17}, number = {12}, pages = {2762}, year = {2017},
+  doi       = {10.3390/s17122762},
+  url       = {https://doi.org/10.3390/s17122762}
+}
+@article{lambeta2020digit,
+  title     = {{DIGIT}: A novel design for a low-cost compact
+               high-resolution tactile sensor},
+  author    = {Lambeta, Mike and Chou, Po-Wei and Tian, Stephen and
+               Yang, Brian and others},
+  journal   = {IEEE Robot.\ Autom.\ Lett.},
+  volume    = {5}, number = {3}, pages = {3838--3845}, year = {2020},
+  doi       = {10.1109/LRA.2020.3009864},
+  url       = {https://doi.org/10.1109/LRA.2020.3009864}
+}
+@article{queeau2018normal,
+  title     = {Normal integration: {A} survey},
+  author    = {Qu{\'e}au, Yvain and Durou, Jean-Denis and
+               Aujol, Jean-Fran\c{c}ois},
+  journal   = {J.\ Math.\ Imaging Vis.},
+  volume    = {60}, number = {4}, pages = {576--593}, year = {2018},
+  doi       = {10.1007/s10851-018-0819-7},
+  url       = {https://doi.org/10.1007/s10851-018-0819-7}
+}
+@inproceedings{harker2008least,
+  title     = {Least squares surface reconstruction from measured
+               gradient fields},
+  author    = {Harker, Matthew and O'Leary, Paul},
+  booktitle = {CVPR}, pages = {1--7}, year = {2008},
+  doi       = {10.1109/CVPR.2008.4587414},
+  url       = {https://doi.org/10.1109/CVPR.2008.4587414}
+}
+@inproceedings{wang2021gelsightwedge,
+  title     = {{GelSight Wedge}: Measuring high-resolution {3D} contact
+               geometry with a compact robot finger},
+  author    = {Wang, Shaoxiong and Lambeta, Mike and Chou, Po-Wei
+               and Calandra, Roberto},
+  booktitle = {ICRA}, pages = {6468--6475}, year = {2021},
+  doi       = {10.1109/ICRA48506.2021.9561781},
+  url       = {https://doi.org/10.1109/ICRA48506.2021.9561781}
+}
+@inproceedings{dong2017improved,
+  title     = {Improved {GelSight} tactile sensor for measuring
+               geometry and slip},
+  author    = {Dong, Siyuan and Yuan, Wenzhen and Adelson, Edward H.},
+  booktitle = {IROS}, pages = {137--144}, year = {2017},
+  doi       = {10.1109/IROS.2017.8206534},
+  url       = {https://doi.org/10.1109/IROS.2017.8206534}
+}
+\end{filecontents*}
+
+% ============================================================
+\documentclass[12pt, a4paper]{ctexart}
+
+% ---- 页面 ----
+\usepackage[top=2.8cm, bottom=2.8cm, left=3.0cm, right=3.0cm,
+            headheight=14pt]{geometry}   % headheight 一并修复
+
+% ---- 数学 ----
+\usepackage{amsmath, amssymb}
+
+% ---- 颜色 ----
+\usepackage{xcolor}
+\definecolor{codebg}   {RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{kwcolor}  {RGB}{  0,  0,180}
+\definecolor{cmcolor}  {RGB}{110,110,110}
+\definecolor{strcolor} {RGB}{  0,130,  0}
+
+% ---- 代码（listings，无需 minted 或额外编译步骤）----
+\usepackage{listings}
+\lstset{
+  language         = Python,
+  basicstyle       = \ttfamily\small,
+  keywordstyle     = \color{kwcolor}\bfseries,
+  commentstyle     = \color{cmcolor}\itshape,
+  stringstyle      = \color{strcolor},
+  showstringspaces = false,
+  breaklines       = true,
+  breakatwhitespace= true,
+  frame            = single,
+  framesep         = 4pt,
+  rulecolor        = \color{codeframe},
+  backgroundcolor  = \color{codebg},
+  xleftmargin      = 1.6em,
+  xrightmargin     = 0.4em,
+  numbers          = left,
+  numberstyle      = \tiny\color{gray},
+  stepnumber       = 1,
+  numbersep        = 5pt,
+  captionpos       = b,
+  aboveskip        = 0.6em,
+  belowskip        = 0.3em,
+  tabsize          = 4,
+}
+
+% ---- 彩色提示框（mdframed，轻量替代 tcolorbox+skins）----
+\usepackage[framemethod=default]{mdframed}
+
+\mdfdefinestyle{bugstyle}{
+  backgroundcolor = red!4!white,
+  linecolor       = red!55!black,
+  linewidth       = 1.2pt,
+  roundcorner     = 3pt,
+  innerleftmargin = 8pt, innerrightmargin = 8pt,
+  innertopmargin  = 6pt, innerbottommargin = 6pt,
+  skipabove       = 6pt, skipbelow = 4pt,
+}
+\mdfdefinestyle{fixstyle}{
+  backgroundcolor = green!4!white,
+  linecolor       = green!50!black,
+  linewidth       = 1.2pt,
+  roundcorner     = 3pt,
+  innerleftmargin = 8pt, innerrightmargin = 8pt,
+  innertopmargin  = 6pt, innerbottommargin = 6pt,
+  skipabove       = 6pt, skipbelow = 4pt,
+}
+
+\newenvironment{bugbox}{%
+  \begin{mdframed}[style=bugstyle]%
+  \noindent{\bfseries\color{red!70!black}[问题 / Bug]\quad}%
+}{%
+  \end{mdframed}%
+}
+\newenvironment{fixbox}{%
+  \begin{mdframed}[style=fixstyle]%
+  \noindent{\bfseries\color{green!60!black}[修复方案]\quad}%
+}{%
+  \end{mdframed}%
+}
+
+% ---- 表格 ----
+\usepackage{booktabs, tabularx, multirow}
+\renewcommand{\arraystretch}{1.25}
+
+% ---- 超链接（禁止在 PDF 书签中出现数学符号，消除警告）----
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks  = true,
+  linkcolor   = {blue!70!black},
+  citecolor   = {blue!70!black},
+  urlcolor    = {blue!70!black},
+  pdftitle    = {GelSight 光度立体重建算法精度问题分析},
+  pdfauthor   = {},
+}
+
+% ---- 参考文献 ----
+\usepackage[numbers,sort&compress]{natbib}
+
+% ---- 页眉页脚 ----
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small\itshape GelSight 光度立体算法精度分析}
+\lhead{\small\itshape 内部技术报告}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- 列表 ----
+\usepackage{enumitem}
+\setlist[enumerate]{leftmargin=*, label=\arabic*.}
+\setlist[itemize]{leftmargin=*}
+
+% ---- 行距 ----
+\usepackage{setspace}
+\onehalfspacing
+
+% ============================================================
+\begin{document}
+% ============================================================
+
+% -------- 封面 --------
+\begin{titlepage}
+  \centering
+  \vspace*{1.8cm}
+  {\LARGE\bfseries GelSight 光度立体重建算法\\[0.5em]精度问题分析报告\par}
+  \vspace{0.5em}
+  {\large\itshape Accuracy Issue Analysis of the GelSight\\[0.2em]
+   Photometric Stereo Reconstruction Pipeline\par}
+  \vspace{1.8em}
+  \rule{0.55\linewidth}{0.5pt}\\[1em]
+  {\normalsize
+    基于源码 \texttt{gelsight\_ps} 的逐模块审查\\[0.4em]
+    覆盖模块：\texttt{geometry.py}、\texttt{ball\_calibrate.py}、\\[0.2em]
+    \texttt{poisson.py}、\texttt{reconstruct.py}、\texttt{image\_loader.py}
+  \par}
+  \vspace{1.8em}
+  {\normalsize\today}
+  \vfill
+  \begin{mdframed}[
+    backgroundcolor = gray!7,
+    linecolor       = gray!45,
+    linewidth       = 0.6pt,
+    roundcorner     = 4pt,
+    innerleftmargin = 12pt, innerrightmargin = 12pt,
+    innertopmargin  = 10pt, innerbottommargin = 10pt,
+  ]
+    \small\textbf{摘要：}本报告对 \texttt{gelsight\_ps} 软件包的光度立体标定与
+    重建流程进行全面精度审查，识别出 \textbf{6~类、12~个具体问题}，包括
+    3~个可立即修复的代码逻辑缺陷及 9~个需算法层面改进的问题。各问题均附有
+    定位代码、误差分析、相关文献（含 DOI 链接）及修复建议，并按影响程度提供
+    修复优先级排序。
+  \end{mdframed}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{引言}
+\label{sec:intro}
+% ============================================================
+
+GelSight 系列触觉传感器~\cite{johnson2009retrographic,yuan2017gelsight}
+通过观察弹性凝胶层在接触时的光度变化，配合光度立体（Photometric Stereo, PS）
+算法~\cite{woodham1980photometric} 重建接触面的三维形貌。其标定流程的核心是：
+用已知几何形状（钢球）压入传感器，建立 RGB 响应到表面法向的逐像素映射（LUT）；
+推理时通过 LUT 预测法向，再经 Frankot-Chellappa 频域积分~\cite{frankot1988method}
+恢复深度图。
+
+经逐行源码审查，当前实现在以下六个方向存在精度问题。
+
+\begin{table}[ht]
+  \centering
+  \caption{问题分类概览}
+  \label{tab:overview}
+  \begin{tabular}{clcc}
+    \toprule
+    \textbf{章节} & \textbf{问题类别} & \textbf{主要模块} & \textbf{数量} \\
+    \midrule
+    \S\ref{sec:gt_bias}     & 地面真值法向量系统性偏差   & \texttt{geometry.py}        & 2 \\
+    \S\ref{sec:regression}  & 回归模型内在局限           & \texttt{ball\_calibrate.py} & 4 \\
+    \S\ref{sec:integration} & 法向积分误差               & \texttt{poisson.py}         & 2 \\
+    \S\ref{sec:bugs}        & 代码逻辑缺陷（可立即修复） & \texttt{reconstruct.py}     & 2 \\
+    \S\ref{sec:eval}        & 评估指标非标准             & \texttt{ball\_calibrate.py} & 1 \\
+    \S\ref{sec:preproc}     & 预处理缺陷                 & \texttt{image\_loader.py}   & 1 \\
+    \midrule
+    & \textbf{合计} & & \textbf{12} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% ============================================================
+\section{地面真值法向量的系统性偏差}
+\label{sec:gt_bias}
+% ============================================================
+
+\subsection{\texttt{nz\_floor} 直接篡改训练标签（高优先级）}
+\label{subsec:nz_floor}
+
+\subsubsection*{问题定位}
+
+\texttt{geometry.py}，函数 \texttt{sphere\_normals\_for\_contact()}：
+
+\begin{lstlisting}[caption={\texttt{nz\_floor} 对训练标签的错误应用}]
+nz_raw = z[inside] / R
+# 本意是防止推理阶段梯度奇异，但错误地修改了训练标签
+nz[inside] = np.maximum(nz_raw, float(nz_floor))  # nz_floor=0.12
+n    = np.stack([nx, ny, nz], axis=-1)
+norm = np.linalg.norm(n, axis=-1, keepdims=True) + 1e-9
+n    = n / norm   # 归一化后 nz 不再是球面真值
+\end{lstlisting}
+
+\begin{bugbox}
+当接触区边缘像素的 $n_z^{raw} < 0.12$ 时，代码将其强制提升至 $0.12$，
+随后对向量 $(n_x,\, n_y,\, 0.12)$ 归一化，得到：
+\[
+  \hat{\mathbf{n}}_{label}
+  = \frac{(n_x,\; n_y,\; 0.12)}{\|(n_x,\; n_y,\; 0.12)\|}
+  \;\neq\; \hat{\mathbf{n}}_{true}
+\]
+回归器以被篡改的 $\hat{\mathbf{n}}_{label}$ 为目标训练，导致高倾斜角区域
+（$\theta > \arccos(0.12) \approx 83^\circ$）法向预测出现\textbf{系统性偏差}。
+\end{bugbox}
+
+\subsubsection*{理论依据}
+
+Woodham~\cite{woodham1980photometric} 在原始 PS 论文中指出：近掠射角样本
+不确定度高，应\textbf{从训练集中剔除}，而非修正。\texttt{nz\_floor} 作为梯度
+分母截断（防止 $p = n_x/n_z$ 奇异化），应仅在推理阶段 \texttt{reconstruct.py}
+中使用。
+
+\begin{fixbox}
+扩大 \texttt{rim\_shrink\_pix} 使进入训练的像素均满足
+$n_z^{raw} \geq \texttt{nz\_floor}$，不对法向向量本身做任何修改：
+
+\begin{lstlisting}
+# geometry.py -- 修复：排除低 nz 像素，而非修改其标签
+valid_nz     = (z[inside] / R) >= float(nz_floor)
+inside_valid = inside.copy()
+inside_valid[inside] = valid_nz        # 只保留合格像素
+mask             = inside_valid.astype(np.uint8)
+nz[inside_valid] = z[inside][valid_nz] / R  # 原始球面法向，不做 floor
+\end{lstlisting}
+\end{fixbox}
+
+% ----------------------------------------
+\subsection{Hertz 接触变形导致球面几何模型失效}
+\label{subsec:hertz}
+
+\texttt{sphere\_normals\_for\_contact()} 假设接触区法向严格等于刚性球面法向。
+然而 GelSight 所用硅胶（Shore~00-20 至 00-40 级）是弹性软材料：根据 Hertz
+弹性接触理论，球体压入时接触边缘凝胶发生非线性弯折变形，真实法向与刚性球面
+法向可差 $5°$--$15°$，Yuan~et~al.~\cite{yuan2017gelsight} 及
+Dong~et~al.~\cite{dong2017improved} 对此均有定性讨论。
+
+\textbf{改进方向：}
+\begin{enumerate}
+  \item \textbf{多形状交叉验证}：用平面、圆柱、球面等标准件交叉验证，
+        当预测深度与几何真值一致时说明模型已收敛至物理正确状态。
+  \item \textbf{数据驱动弹性修正}：通过对已知平面的残差法向场统计建模，
+        得到与接触深度相关的修正量，叠加至 $\hat{\mathbf{n}}_{sphere}$。
+\end{enumerate}
+
+% ============================================================
+\section{回归模型的内在局限}
+\label{sec:regression}
+% ============================================================
+
+\subsection{线性（二阶多项式）模型无法描述复杂光学效应}
+\label{subsec:linear_model}
+
+\texttt{build\_feature\_extractor()} 构造 11 维多项式特征，对应线性回归：
+\[
+  \boldsymbol{\phi}(\mathbf{c})
+  = \bigl[r',\; g',\; b',\; I,\; 1,\; R^2,\; G^2,\; B^2,\; RG,\; RB,\; GB\bigr],
+  \qquad
+  \hat{\mathbf{n}} = \mathbf{W}\boldsymbol{\phi}
+\]
+
+\begin{table}[ht]
+  \centering
+  \caption{GelSight 光学通道中的非线性效应}
+  \label{tab:nonlinear}
+  \begin{tabular}{lcc}
+    \toprule
+    \textbf{效应}                      & \textbf{线性可描述？} & \textbf{影响区域} \\
+    \midrule
+    多 LED 距离衰减（$1/d^2$ 律）      & 否        & 全局         \\
+    凝胶--空气界面菲涅尔反射            & 否        & 大倾斜角区域 \\
+    硅胶内次表面散射                    & 否        & 接触核心区   \\
+    多 LED 混合色散差异                 & 部分      & 全局         \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Lambeta~et~al.~\cite{lambeta2020digit} 在 DIGIT 传感器中用 CNN 替代逐像素
+线性回归，在高曲率区域法向误差显著降低。短期改进是扩展特征空间：
+
+\begin{lstlisting}[caption={短期改进：追加三阶单项式}]
+feature_names += ["R^3", "G^3", "B^3"]
+feats += [R * R * R, G * G * G, B * B * B]
+\end{lstlisting}
+
+% ----------------------------------------
+\subsection{8{\texttimes}8 分块网格过粗，无法捕捉像素级光照变化}
+\label{subsec:block_grid}
+
+\begin{lstlisting}[caption={硬编码的 8x8 分块（ball\_calibrate.py 第 1066 行）}]
+K  = 8
+bh = (H + K - 1) // K   # 对 480x640 图像约为 60x80 像素/块
+bw = (W + K - 1) // K
+\end{lstlisting}
+
+同一块内像素到 LED 的方向角最大可相差 $20°$--$30°$，块内的 RGB→法向映射并非
+同一个线性变换。Wang~et~al.~\cite{wang2021gelsightwedge} 的 GelSight~Wedge
+使用逐像素 LUT，正是对此局限的直接回应。
+
+\begin{fixbox}
+将 $K$ 提高至 16 或 32；对覆盖充足像素直接逐像素岭回归：
+
+\begin{lstlisting}
+K = 16   # 块大小降至约 15x20 像素
+
+for y, x in zip(*np.where(Ns >= min_spp)):
+    W_field[y, x] = np.linalg.solve(
+        XtX[y, x] + lam * np.eye(FEAT_DIM),
+        XtY[y, x]
+    )
+# 覆盖不足的像素用邻域加权（RBF）插值填充
+\end{lstlisting}
+\end{fixbox}
+
+% ----------------------------------------
+\subsection{高斯融合邻域搜索范围不足}
+\label{subsec:gaussian_blend}
+
+\begin{lstlisting}[caption={sigma 与搜索范围不匹配（ball\_calibrate.py 第 1113 行）}]
+sigma_x = bw * 0.75   # 有效半径约 1.5 个块宽
+sigma_y = bh * 0.75
+# 搜索范围仅 +-1 块（约 +-1.33 sigma），应至少 +-2 sigma
+for by in range(max(0, int(by_f) - 1), min(K, int(by_f) + 2)):
+    for bx in range(max(0, int(bx_f) - 1), min(K, int(bx_f) + 2)):
+\end{lstlisting}
+
+图像角点处只有 1--2 个有效邻居，$w_{sum}$ 极小，导致：
+\[
+  \mathbf{W}_{acc}
+  = \mathbf{W}_{global}
+    + \frac{\mathbf{W}_{acc} - \mathbf{W}_{global}}{w_{sum}}
+  \;\xrightarrow{w_{sum}\to 0}\; \text{残差被无限放大}
+\]
+
+\begin{fixbox}
+搜索范围扩展至 $\pm 2$ 块，增加退化保护：
+
+\begin{lstlisting}
+radius = 2
+for by in range(max(0, int(by_f) - radius),
+                min(K, int(by_f) + radius + 1)):
+    for bx in range(max(0, int(bx_f) - radius),
+                    min(K, int(bx_f) + radius + 1)):
+        ...
+if wsum > 1e-6:
+    W_field[y, x] = W_global + (W_acc - W_global) / wsum
+else:
+    W_field[y, x] = W_global   # 退化为全局模型
+\end{lstlisting}
+\end{fixbox}
+
+% ----------------------------------------
+\subsection{样本积累的像素级 Python 循环效率极低}
+\label{subsec:loop}
+
+\texttt{ball\_calibrate.py} 第~1009--1026~行通过 Python 循环逐像素累积
+$\mathbf{X}^T\mathbf{X}$ 和 $\mathbf{X}^T\mathbf{Y}$，每帧约 3\,000--10\,000
+像素，全部在 Python 层迭代。此问题\textbf{不影响精度}，但速度可提升 10--50 倍：
+
+\begin{lstlisting}[caption={向量化方案（取代像素级 for 循环）}]
+ys, xs = np.where(core > 0)
+v   = X[ys, xs]          # [N, F]
+yv  = Y[ys, xs]          # [N, out_dim]
+w   = weights[ys, xs]    # [N]
+np.add.at(XtX, (ys, xs),
+          np.einsum('ni,nj->nij', v * w[:, None], v))
+np.add.at(XtY, (ys, xs),
+          np.einsum('ni,nj->nij', v * w[:, None], yv))
+Ns[ys, xs] += (w > 0).astype(np.int32)
+\end{lstlisting}
+
+% ============================================================
+\section{法向积分误差}
+\label{sec:integration}
+% ============================================================
+
+\subsection{Frankot-Chellappa 的周期性假设引发低频振铃}
+\label{subsec:fc_ringing}
+
+\texttt{poisson.py} 实现的 Frankot-Chellappa 积分~\cite{frankot1988method}
+通过 2D FFT 求解 Poisson 方程：
+\[
+  Z(\omega_x,\omega_y)
+  = \frac{-j\omega_x P - j\omega_y Q}{\omega_x^2+\omega_y^2}
+\]
+FFT 隐含地假设信号在边界处首尾周期连接，而深度图并不满足此条件，导致低频
+振铃伪影（Gibbs 效应）。Qu\'eau~et~al.~\cite{queeau2018normal} 的综述推荐基于
+DCT-II 的 Poisson 求解器~\cite{simchony1990direct}，其满足 Neumann 零通量
+边界条件从根本上消除振铃；Harker \& O'Leary~\cite{harker2008least}
+进一步提出最小二乘最优积分方法。
+
+\begin{fixbox}[frametitle={}]
+替换 \texttt{poisson.py} 中的积分核心为 DCT-II 方案：
+
+\begin{lstlisting}[caption={基于 DCT-II 的 Poisson 求解器（满足 Neumann BC）}]
+from scipy.fft import dctn, idctn
+
+def poisson_dct(p: np.ndarray, q: np.ndarray) -> np.ndarray:
+    """Reference: Simchony et al., IEEE TPAMI, 1990."""
+    H, W = p.shape
+    div          = np.zeros((H, W), dtype=np.float64)
+    div[:, 1:]  += p[:, :-1];  div[:, :-1]  -= p[:, :-1]
+    div[1:, :]  += q[:-1, :];  div[:-1, :]  -= q[:-1, :]
+    D            = dctn(div, norm='ortho')
+    cy  = np.cos(np.pi * np.arange(H) / H)[:, None]
+    cx  = np.cos(np.pi * np.arange(W) / W)[None, :]
+    den = 2.0 * (cy - 1.0) + 2.0 * (cx - 1.0);  den[0,0] = 1.0
+    D  /= den;  D[0, 0] = 0.0
+    return idctn(D, norm='ortho').astype(np.float32)
+\end{lstlisting}
+\end{fixbox}
+
+% ----------------------------------------
+\subsection{低 \texorpdfstring{$n_z$}{nz} 处梯度放大污染全局积分}
+\label{subsec:nz_amplification}
+
+\begin{lstlisting}[caption={nz=0.1 时梯度被放大 10 倍（reconstruct.py）}]
+p_grad = n[..., 0] / np.maximum(n[..., 2], 0.1)
+q_grad = n[..., 1] / np.maximum(n[..., 2], 0.1)
+\end{lstlisting}
+
+当 $n_z = 0.1$（约 $84°$ 倾角）时梯度放大 10 倍。由于 FFT 是全局算子，
+少量噪声大的边缘梯度会扩散至整幅深度图。
+Harker \& O'Leary~\cite{harker2008least} 与
+Qu\'eau~et~al.~\cite{queeau2018normal} 推荐以 $c = n_z^2$ 为置信权重降权：
+
+\begin{fixbox}
+\begin{lstlisting}
+conf    = np.clip(n[..., 2], 0.0, 1.0) ** 2   # 置信度权重
+nz_safe = np.maximum(n[..., 2], 0.25)          # 更保守截断（约 76 度）
+p_grad  = (n[..., 0] / nz_safe) * conf
+q_grad  = (n[..., 1] / nz_safe) * conf
+\end{lstlisting}
+\end{fixbox}
+
+% ============================================================
+\section{代码逻辑缺陷}
+\label{sec:bugs}
+% ============================================================
+
+\subsection{\texttt{image\_dir} 模式下掩膜被施加两次}
+\label{subsec:double_mask}
+
+\begin{lstlisting}[caption={接触掩膜被连续施加两次（reconstruct.py）}]
+# 第一次：对绝对深度施加掩膜
+if contact_mask_enable and ref_lin is not None:
+    mask = _residual_mask(...)
+    if mask is not None:
+        depth = depth * (mask / 255.0)     # depth 已被掩膜
+
+d_diff = depth - ref_depth                 # depth 已不完整
+
+# 第二次：对 d_diff 再次施加掩膜
+if contact_mask_enable and ref_lin is not None:
+    mask = _residual_mask(...)
+    if mask is not None:
+        d_diff = d_diff * (mask / 255.0)   # 等效二次掩膜
+\end{lstlisting}
+
+\begin{bugbox}
+实际计算结果为：
+$d\_diff = (depth_{orig} \cdot M - ref\_depth) \cdot M$，
+正确结果应为：
+$d\_diff = (depth_{orig} - ref\_depth) \cdot M$。
+在掩膜外缘，第一次掩膜将 $depth_{orig}$ 置零，当 $ref\_depth \neq 0$ 时
+掩膜边界处会引入假深度差。
+\end{bugbox}
+
+\begin{fixbox}
+移除对绝对 \texttt{depth} 的第一次掩膜，仅对 \texttt{d\_diff} 施加一次：
+
+\begin{lstlisting}
+d_diff = (depth - ref_depth).astype(np.float32)
+
+if contact_mask_enable and ref_lin is not None:
+    mask = _residual_mask(bgr_lin, ref_lin,
+                          cm_w_chroma, cm_w_int,
+                          cm_thr_rel, cm_min_area)
+    if mask is not None:
+        d_diff *= (mask.astype(np.float32) / 255.0)
+\end{lstlisting}
+\end{fixbox}
+
+% ----------------------------------------
+\subsection{\texttt{out\_dim=2} 路径的 \texttt{sqrt} 产生静默 \texttt{NaN}}
+\label{subsec:sqrt_nan}
+
+\begin{lstlisting}[caption={clip 在 sqrt 之后无法清除 NaN（reconstruct.py）}]
+nz = np.sqrt(1.0 - nx * nx - ny * ny)  # nx^2+ny^2>1 时 -> NaN
+nz = np.clip(nz, 0.0, 1.0)             # clip(NaN) 仍然是 NaN!
+\end{lstlisting}
+
+\begin{bugbox}
+当回归器外推至 $n_x^2 + n_y^2 > 1$ 时，\texttt{np.sqrt} 返回 \texttt{NaN}，
+\textbf{\texttt{np.clip} 不清除 \texttt{NaN}}，其沿
+normalize $\to$ $p$~grad $\to$ $q$~grad $\to$ FFT 全链路传播，
+最终深度图出现随机 \texttt{NaN} 块。
+注：\texttt{ball\_calibrate.py} 第~1258~行评估路径已正确处理此问题，
+但 \texttt{reconstruct.py} 未同步。
+\end{bugbox}
+
+\begin{fixbox}
+将 \texttt{clip} 移入 \texttt{sqrt} 内部（与 \texttt{ball\_calibrate.py} 对齐）：
+
+\begin{lstlisting}
+nz = np.sqrt(np.clip(1.0 - nx * nx - ny * ny, 0.0, 1.0))
+nz = np.clip(nz, 0.0, 1.0)   # 保留作防御性检查
+\end{lstlisting}
+\end{fixbox}
+
+% ============================================================
+\section{评估指标问题}
+\label{sec:eval}
+% ============================================================
+
+\texttt{ball\_calibrate.py} 第~1275~行使用自定义指标
+$\tfrac{1+\cos\theta}{2} \in [0,1]$，
+在 PS 文献中不通用且对大角度误差不敏感（$90°$ 误差时值为 $0.5$，看似"尚可"）。
+PS 领域自 Woodham~\cite{woodham1980photometric} 起的标准指标为
+\textbf{平均角度误差（MAE）}，单位为度：
+\[
+  \mathrm{MAE}
+  = \frac{1}{|\mathcal{M}|}
+    \sum_{(u,v)\in\mathcal{M}}
+    \arccos\!\Bigl(
+      \hat{\mathbf{n}}_{pred}^{(u,v)} \cdot \hat{\mathbf{n}}_{gt}^{(u,v)}
+    \Bigr)
+\]
+
+\begin{fixbox}
+\begin{lstlisting}
+err_deg    = np.degrees(np.arccos(np.clip(cos, -1.0, 1.0)))
+mae        = float(err_deg[mask].mean())
+median_err = float(np.median(err_deg[mask]))
+for thr in [5.0, 10.0, 15.0]:
+    print(f"  < {thr:.0f} deg: {(err_deg[mask]<thr).mean()*100:.1f}%")
+\end{lstlisting}
+\end{fixbox}
+
+% ============================================================
+\section{预处理缺陷：缺少平场校正}
+\label{sec:preproc}
+% ============================================================
+
+\texttt{Preprocessor.apply()} 执行暗场减法和 gamma 线性化，但未校正 LED 照明的
+空间不均匀性（晕影，vignetting）。GelSight 图像中心与边缘的照射强度比通常达
+2--4 倍~\cite{yuan2017gelsight,dong2017improved}，无法被逐像素 LUT 完全吸收。
+
+\begin{fixbox}
+对平坦未受力凝胶面拍摄参考图 $\mathbf{I}_{flat}$，在暗/白场校正后追加平场除法：
+
+\begin{lstlisting}
+# Preprocessor.__init__
+if cfg.get("flat_field_path"):
+    self.flat_field = self._dark_white_correct(
+        imread_color(cfg["flat_field_path"]))
+else:
+    self.flat_field = None
+
+# Preprocessor.apply（暗/白场校正之后）
+if self.flat_field is not None:
+    bgr_lin = np.clip(bgr_lin / (self.flat_field + 1e-4), 0.0, None)
+\end{lstlisting}
+\end{fixbox}
+
+% ============================================================
+\section{问题汇总与修复优先级}
+\label{sec:summary}
+% ============================================================
+
+\begin{table}[ht]
+  \centering
+  \caption{全部 12 个问题汇总}
+  \label{tab:summary}
+  \small
+  \begin{tabularx}{\textwidth}{clXcc}
+    \toprule
+    \textbf{\#} & \textbf{主要文件}
+                & \textbf{问题描述}
+                & \textbf{精度影响}
+                & \textbf{修复难度} \\
+    \midrule
+    10 & \texttt{reconstruct.py}     & \texttt{sqrt} 产生静默 NaN
+       & \textbf{极高}   & 极低 \\
+    9  & \texttt{reconstruct.py}     & 掩膜施加两次，\texttt{d\_diff} 错误
+       & 高              & 低   \\
+    1  & \texttt{geometry.py}        & \texttt{nz\_floor} 污染训练标签
+       & 高              & 低   \\
+    7  & \texttt{poisson.py}         & FC 周期假设引发低频振铃
+       & 高              & 中   \\
+    8  & \texttt{reconstruct.py}     & 低 $n_z$ 梯度放大，污染全局积分
+       & 高              & 中   \\
+    5  & \texttt{ball\_calibrate.py} & 高斯融合邻域范围不足
+       & 中              & 低   \\
+    4  & \texttt{ball\_calibrate.py} & $K=8$ 分块过粗
+       & 中高            & 中   \\
+    11 & \texttt{ball\_calibrate.py} & 评估指标非标准 MAE
+       & 可观测性差      & 低   \\
+    12 & \texttt{image\_loader.py}   & 无平场校正
+       & 中              & 中   \\
+    2  & \texttt{geometry.py}        & Hertz 变形未建模
+       & 中              & 高   \\
+    3  & \texttt{ball\_calibrate.py} & 线性多项式模型不足
+       & 中高            & 高   \\
+    6  & \texttt{ball\_calibrate.py} & 像素循环低效（不影响精度）
+       & 无              & 低   \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\noindent\textbf{建议修复路线：}
+
+\begin{enumerate}
+  \item \textbf{立即可修}（不改变算法结构）\\
+        \#10（\texttt{sqrt~NaN}）$\to$
+        \#9（双重掩膜）$\to$
+        \#11（评估指标改 MAE）$\to$
+        \#6（向量化加速）
+
+  \item \textbf{短期改进}（修改参数逻辑）\\
+        \#1（\texttt{nz\_floor} 标签修复）$\to$
+        \#5（扩大高斯融合邻域）
+
+  \item \textbf{中期改进}（替换子模块）\\
+        \#7（换 DCT 积分器）$\to$
+        \#8（置信度加权梯度）$\to$
+        \#12（添加平场校正）
+
+  \item \textbf{长期改进}（重构算法）\\
+        \#4（增大 $K$ 至逐像素回归）$\to$
+        \#3（引入 MLP 非线性模型）$\to$
+        \#2（Hertz 弹性修正）
+\end{enumerate}
+
+% ============================================================
+\newpage
+\bibliographystyle{unsrtnat}
+\bibliography{references}
+% ============================================================
+
+\end{document}

@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Data & model artifacts (large files)
+*.npz
+*.npy
+*.pkl
+*.h5
+*.pt
+*.pth
+rgb2n_field.npz
+rgb2n_lut.yaml
+coverage.npy
+
+# Output directories (generated at runtime)
+calib_out/
+solve_out/
+geom_depth/
+debug/
+
+# Images (usually large binary datasets)
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.tiff
+*.tif
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & reports (compiled)
+*.log
+reports/*.pdf
+reports/*.aux
+reports/*.log
+reports/*.toc
+reports/*.out
+reports/*.bbl
+reports/*.blg
+reports/*.synctex.gz
