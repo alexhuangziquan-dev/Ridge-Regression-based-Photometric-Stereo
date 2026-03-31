@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
-"""
-最终精简版配置（仅保留你的代码真实会读取的字段）
-保持你原本填写的所有路径不变。
+"""Example configuration for the gelsight_ps pipeline.
+
+Copy this file and modify the paths and parameters to match your setup.
+Only fields that the pipeline actually reads are included.
 """
 
 CFG = {
     "camera": {
-        "width":  512,
+        "width": 512,
         "height": 512,
-        "pixel_size_mm": 0.041015,#0.0315
+        "pixel_size_mm": 0.041015,
     },
 
     "preproc": {
@@ -19,7 +20,8 @@ CFG = {
     },
 
     "calib": {
-        "image_dir": r"F:\PS_GEL\gelsight_ps_ballcalib_minimal\test_data\calib_multi",  # 子目录以半径命名，如 1.0/ 2.0/
+        # Root directory with radius-named subdirectories (e.g. 1.0/, 2.0/).
+        "image_dir": r"F:\PS_GEL\gelsight_ps_ballcalib_minimal\test_data\calib_multi",
 
         "ridge_lambda": 1e-2,
         "min_samples_per_pixel": 4,
@@ -29,6 +31,7 @@ CFG = {
         "use_quadratic": True,
         "use_cross": True,
 
+        # No-press reference images for baseline subtraction.
         "ref_nopress_dir": r"F:\PS_GEL\gelsight_ps_ballcalib_minimal\test_data\plain",
 
         "rim_shrink_pix": 0.5,
@@ -39,9 +42,12 @@ CFG = {
     },
 
     "solve": {
-        "image_dir": r"F:\PS_GEL\gelsight_ps_ballcalib_minimal\test_data\4mm_3_3",#r"F:\PS_GEL\gelsight_ps_ballcalib_minimal\251111_data\251111\1mm_25_5"
-        "lut_yaml":  r"F:\PS_GEL\gelsight_ps_ballcalib_minimal\output\3dim-ref26314\out_calib\rgb2n_lut.yaml",
+        # Directory of images to reconstruct.
+        "image_dir": r"F:\PS_GEL\gelsight_ps_ballcalib_minimal\test_data\4mm_3_3",
+        # Path to the calibration LUT produced by the calib step.
+        "lut_yaml": r"F:\PS_GEL\gelsight_ps_ballcalib_minimal\output\3dim-ref26314\out_calib\rgb2n_lut.yaml",
 
+        # No-press reference images.
         "ref_nopress_dir": r"F:\PS_GEL\gelsight_ps_ballcalib_minimal\test_data\plain",
         "ref_nopress_path": "",
 
@@ -55,16 +61,19 @@ CFG = {
         "cm_thr_rel": 0.25,
         "cm_min_area": 80,
 
-        # 新增：输入模式开关，image_dir=原文件模式，camera=新实时模式
-        "input_mode" : "image_dir",
-        # 新增：摄像头设备号，默认0（内置摄像头），外接摄像头可改为1/2等
+        # Input mode: "image_dir" for batch file processing,
+        # "camera" for real-time camera feed.
+        "input_mode": "image_dir",
+        # Camera device index (0 = built-in, 1/2 = external).
         "camera_id": 1,
 
-        "camera_subtract_ref_plane" : True ,
-        "ref_frame_count" : 50,
+        "camera_subtract_ref_plane": True,
+        # Number of frames averaged to build the reference plane.
+        "ref_frame_count": 50,
 
-        "d_thred_h" : 10,
-        "d_thred_l" : 5,
+        # Depth display thresholds for camera mode (mm).
+        "d_thred_h": 10,
+        "d_thred_l": 5,
     },
 
     "output": {
@@ -73,9 +82,6 @@ CFG = {
     },
 
     "manual_pick": {
-        # "reuse_from_circles_dir":
-        #     r"F:\PS_GEL\gelsight_ps_ballcalib_minimal\output\2dim_00315\out_calib\debug\circles",
-        # "reuse_from_debug_dir": r"F:\PS_GEL\gelsight_ps_ballcalib_minimal\output\3dim-ref99\out_calib\debug",
         "draw_scale": 1.0,
         "min_points": 3,
     },

@@ -32,12 +32,12 @@ import numpy as np
 import cv2
 import yaml
 
-# Project I/O – image_io replaces the former io package to avoid naming conflicts.
+# Project I/O utilities.
 from ..image_io.image_loader import (
     list_images, imread_color, imwrite, Preprocessor
 )
 
-# Poisson integration
+# Poisson depth integration.
 from ..utils.poisson import integrate_normals_poisson
 
 
@@ -46,6 +46,7 @@ from ..utils.poisson import integrate_normals_poisson
 # ---------------------------------------------------------
 
 def _as_int_scalar(x) -> int:
+    """Converts an arbitrary scalar-like value to a Python int."""
     arr = np.asarray(x).reshape(-1)
     if arr.size == 0:
         raise TypeError(f"empty value for int scalar: {x}")
@@ -278,6 +279,19 @@ def _contact_mask_with_thresholds(d_diff: np.ndarray,
 # ---------------------------------------------------------
 
 def run_reconstruction(cfg: Dict[str, Any]) -> str:
+    """Runs the depth-reconstruction pipeline in batch or real-time mode.
+
+    Args:
+        cfg: Top-level configuration dict. See ``configs/example_config.py``
+            for the full schema.
+
+    Returns:
+        Output directory path (batch mode) or a status message (camera mode).
+
+    Raises:
+        RuntimeError: If the camera device cannot be opened.
+        ValueError: If ``solve.input_mode`` is not recognised.
+    """
     cam = cfg["camera"]
     H = _as_int_scalar(cam["height"])
     W = _as_int_scalar(cam["width"])
@@ -285,22 +299,22 @@ def run_reconstruction(cfg: Dict[str, Any]) -> str:
     solve_cfg = cfg["solve"]
     out_cfg = cfg["output"]
 
-    # --- Configuration parsing ---
+    # --- Parse solve configuration. ---
     input_mode = solve_cfg.get("input_mode", "image_dir")
     camera_id = _as_int_scalar(solve_cfg.get("camera_id", 0))
-    # Whether to subtract the reference plane in camera mode (default True).
+    # Whether to subtract the reference plane in camera mode.
     camera_subtract_ref_plane = bool(solve_cfg.get("camera_subtract_ref_plane", True))
     # Number of initial frames averaged to build the reference plane.
     ref_frame_count = _as_int_scalar(solve_cfg.get("ref_frame_count", 30))
     ref_frame_count = max(1, ref_frame_count)
     # Dual depth thresholds for the camera-mode contact mask.
-    d_thred_h = float(solve_cfg.get("d_thred_h", 10.0))  # high threshold
-    d_thred_l = float(solve_cfg.get("d_thred_l", 2.0))   # low threshold
+    d_thred_h = float(solve_cfg.get("d_thred_h", 10.0))  # High threshold.
+    d_thred_l = float(solve_cfg.get("d_thred_l", 2.0))   # Low threshold.
 
     out_dir = out_cfg["solve_out_dir"]
     os.makedirs(out_dir, exist_ok=True)
 
-    # Sub-directories (image_dir mode only).
+    # Output sub-directories (image_dir mode only).
     depth_dir = os.path.join(out_dir, "depth")
     normal_dir = os.path.join(out_dir, "normal")
     vis_dir = os.path.join(out_dir, "vis")
@@ -328,7 +342,7 @@ def run_reconstruction(cfg: Dict[str, Any]) -> str:
     feat_names = [str(x) for x in meta.get("features", [])]
     out_dim = int(meta.get("out_dim", 3))
 
-    # No-press reference frame (image_dir mode; overridden by camera-mode averaging).
+    # No-press reference frame (overridden by live averaging in camera mode).
     ref_lin = None
     ref_depth = None
     if input_mode == "image_dir":
@@ -397,7 +411,7 @@ def run_reconstruction(cfg: Dict[str, Any]) -> str:
             if depth_flip_sign:
                 depth = -depth
 
-            # Residual contact mask (image_dir mode uses the chroma/intensity mask).
+            # Apply chroma/intensity residual contact mask.
             if contact_mask_enable and ref_lin is not None:
                 mask = _residual_mask(bgr_lin, ref_lin,
                                       cm_w_chroma, cm_w_int,
@@ -405,7 +419,7 @@ def run_reconstruction(cfg: Dict[str, Any]) -> str:
                 if mask is not None:
                     depth = depth * (mask.astype(np.float32) / 255.0)
 
-            # Relative depth and serialisation.
+            # Compute relative depth and save results.
             if ref_depth is not None:
                 d_diff = (depth - ref_depth).astype(np.float32)
 
@@ -422,18 +436,18 @@ def run_reconstruction(cfg: Dict[str, Any]) -> str:
                 # Record per-frame maximum depth difference.
                 depth_diff_max_stats[f"{base}_depth_minus_ref"] = float(np.max(d_diff))
 
-                # Colour-mapped depth visualisation.
+                # Colour-mapped depth visualisation (JET).
                 vis_map = cv2.normalize(d_diff, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
                 vis_map = cv2.applyColorMap(vis_map, cv2.COLORMAP_JET)
                 imwrite(os.path.join(vis_dir, f"{base}_depth_minus_ref.png"), vis_map)
 
-            # Normal visualisation.
+            # Normal-map visualisation.
             n_vis = ((n + 1) / 2 * 255).astype(np.uint8)
             imwrite(os.path.join(vis_dir, f"{base}_normal.png"), n_vis[:, :, ::-1])
 
             print(f"[solve] {idx}/{len(img_paths)} processed: {base}")
 
-        # Write JSON summary.
+        # Write per-frame depth statistics as JSON.
         out_json = os.path.join(out_dir, "depth_diff_max_stats.json")
         with open(out_json, "w", encoding="utf-8") as f:
             json.dump(depth_diff_max_stats, f, ensure_ascii=False, indent=2)
@@ -447,73 +461,70 @@ def run_reconstruction(cfg: Dict[str, Any]) -> str:
     elif input_mode == "camera":
         cap = cv2.VideoCapture(camera_id)
         if not cap.isOpened():
-            raise RuntimeError(f"无法打开摄像头设备 {camera_id}，请检查设备是否存在或权限是否足够")
+            raise RuntimeError(f"Cannot open camera device {camera_id}. Check that the device exists and permissions are correct.")
 
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, W)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, H)
 
-        # Fixed window name ensures smooth visual transitions.
+        # Use a fixed window name for smooth visual transitions.
         if camera_subtract_ref_plane:
             window_name = "Gelsight Real-Time (Subtracted Ref Plane) (press 'q' to quit)"
         else:
             window_name = "Gelsight Real-Time (Raw Depth) (press 'q' to quit)"
         window_created = False
 
-        # State for reference-plane construction from the first n frames.
+        # State for reference-plane construction from the first N frames.
         frame_idx = 0
         ref_bgr_lin_list = []
         ref_depth_list = []
         ref_plane_generated = False
 
-        print(f"[camera mode] 已打开摄像头 {camera_id}，实时解算中（按'q'退出）")
-        print(f"[camera mode] 目标图像尺寸：{W}x{H}")
-        print(f"[camera mode] 是否减去0平面：{camera_subtract_ref_plane}")
-        print(f"[camera mode] 前{ref_frame_count}帧生成零平面，当前正在采集第1帧...")
+        print(f"[camera mode] Opened camera {camera_id}, running real-time solve (press 'q' to quit)")
+        print(f"[camera mode] Target resolution: {W}x{H}")
+        print(f"[camera mode] Subtract reference plane: {camera_subtract_ref_plane}")
+        print(f"[camera mode] Collecting first {ref_frame_count} frames for reference plane...")
         if contact_mask_enable:
-            print(f"[camera mode] 掩膜功能已开启，高低阈值：d_thred_h={d_thred_h}, d_thred_l={d_thred_l}")
+            print(f"[camera mode] Contact mask enabled, thresholds: d_thred_h={d_thred_h}, d_thred_l={d_thred_l}")
 
         try:
             while True:
                 ret, bgr = cap.read()
                 if not ret:
-                    print("[warning] 摄像头帧读取失败，退出循环")
+                    print("[warning] Failed to read camera frame, exiting loop")
                     break
 
                 try:
-                    # Step 1: Input validation (identical for all frames).
-                    # Ensure uint8 pixel values.
+                    # Step 1: Input validation.
                     bgr = bgr.astype(np.uint8) if bgr is not None else np.zeros((H, W, 3), dtype=np.uint8)
 
-                    # Ensure 3-channel BGR (consistent with imread_color).
-                    if bgr.ndim == 2:  # greyscale → BGR
+                    # Ensure 3-channel BGR.
+                    if bgr.ndim == 2:
                         bgr = cv2.cvtColor(bgr, cv2.COLOR_GRAY2BGR)
-                    elif bgr.ndim == 3 and bgr.shape[2] != 3:  # e.g. RGBA → BGR
+                    elif bgr.ndim == 3 and bgr.shape[2] != 3:
                         bgr = cv2.cvtColor(bgr, cv2.COLOR_RGBA2BGR)
 
-                    # Clip to valid range.
                     bgr = np.clip(bgr, 0, 255).astype(np.uint8)
 
-                    # Step 2: Camera-mode three-stage pre-processing (identical for all frames).
-                    # Stage 1: Crop 15% border to remove lens distortion at the edges.
+                    # Step 2: Three-stage spatial preprocessing.
+                    # Stage 1: Crop 15% border to mitigate lens distortion.
                     h_original, w_original = bgr.shape[:2]
                     crop_margin_h = int(h_original * 0.15)
                     crop_margin_w = int(w_original * 0.15)
-                    # Guard against zero margins on very small frames.
                     crop_margin_h = max(1, crop_margin_h)
                     crop_margin_w = max(1, crop_margin_w)
                     bgr_cropped_edge = bgr[crop_margin_h:-crop_margin_h, crop_margin_w:-crop_margin_w, :]
 
-                    # Stage 2: Centre-crop to a square aligned with the short side.
+                    # Stage 2: Centre-crop to a square (short-side aligned).
                     h_cropped, w_cropped = bgr_cropped_edge.shape[:2]
                     short_side = min(h_cropped, w_cropped)
                     h_start = (h_cropped - short_side) // 2
                     w_start = (w_cropped - short_side) // 2
                     bgr_cropped_square = bgr_cropped_edge[h_start:h_start+short_side, w_start:w_start+short_side, :]
 
-                    # Stage 3: Resize to the target resolution (H×W).
+                    # Stage 3: Resize to the target resolution.
                     bgr_resized = cv2.resize(bgr_cropped_square, (W, H), interpolation=cv2.INTER_LINEAR)
 
-                    # Step 3: Preprocessing and inference (identical for all frames).
+                    # Step 3: Radiometric preprocessing and LUT inference.
                     current_bgr_lin = pre.apply(bgr_resized).astype(np.float32)
 
                     # Normal prediction.
@@ -539,17 +550,16 @@ def run_reconstruction(cfg: Dict[str, Any]) -> str:
                         frame_idx += 1
 
                         if frame_idx % 5 == 0 or frame_idx == ref_frame_count:
-                            print(f"[camera mode] 零平面采集进度：{frame_idx}/{ref_frame_count} 帧")
+                            print(f"[camera mode] Reference plane progress: {frame_idx}/{ref_frame_count} frames")
 
                         if frame_idx >= ref_frame_count:
                             ref_lin = np.mean(np.array(ref_bgr_lin_list), axis=0).astype(np.float32)
                             ref_depth = np.mean(np.array(ref_depth_list), axis=0).astype(np.float32)
                             ref_plane_generated = True
-                            print(f"[camera mode] 零平面生成完成！开始可视化做差结果")
+                            print("[camera mode] Reference plane ready. Starting live visualisation.")
 
-                    # Step 5: Visualisation (current depth before reference is ready,
-                    #         subtracted depth afterwards).
-                    # Fixed normalisation: depth range [0, 100] → pixel value [0, 225].
+                    # Step 5: Visualisation.
+                    # Fixed normalisation: depth range [0, 100] maps to pixel [0, 225].
                     global_max_depth = 100.0
                     global_pixel_max = 225.0
                     pixel_full_range = 255.0
@@ -559,7 +569,7 @@ def run_reconstruction(cfg: Dict[str, Any]) -> str:
                     else:
                         if camera_subtract_ref_plane:
                             d_diff = (current_depth - ref_depth).astype(np.float32)
-                            # Dual-threshold dilated connected-component mask.
+                            # Apply dual-threshold connected-component contact mask.
                             if contact_mask_enable and ref_lin is not None:
                                 contact_mask = _contact_mask_with_thresholds(d_diff, d_thred_h, d_thred_l)
                                 d_diff = d_diff * (contact_mask.astype(np.float32) / 255.0)
@@ -567,7 +577,7 @@ def run_reconstruction(cfg: Dict[str, Any]) -> str:
                         else:
                             vis_data = current_depth.astype(np.float32)
 
-                    # Fixed-range linear normalisation, then JET colour map.
+                    # Linear normalisation followed by JET colour map.
                     vis_data_clipped = np.clip(vis_data, 0.0, global_max_depth)
 
                     if global_max_depth > 0:
@@ -579,28 +589,28 @@ def run_reconstruction(cfg: Dict[str, Any]) -> str:
                     vis_map = np.clip(vis_map, 0, int(pixel_full_range))
                     vis_map = cv2.applyColorMap(vis_map, cv2.COLORMAP_JET)
 
-                    # Display in a single persistent window for smooth transitions.
+                    # Display in a persistent window for smooth transitions.
                     if not window_created:
                         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
                         window_created = True
                     cv2.imshow(window_name, vis_map)
 
                 except Exception as e:
-                    print(f"[warning] 单帧解算失败：{str(e)}，跳过当前帧")
+                    print(f"[warning] Frame processing failed: {e}, skipping")
                     continue
 
-                # Key detection – press 'q' to quit.
+                # Poll for quit key.
                 if window_created:
                     key = cv2.waitKey(1) & 0xFF
                     if key == ord('q'):
-                        print("[camera mode] 用户主动退出")
+                        print("[camera mode] User requested exit")
                         break
                 else:
                     cv2.waitKey(1)
                     continue
 
         finally:
-            # Release resources; double waitKey clears the OpenCV event queue on Windows.
+            # Release resources. Double waitKey clears the OpenCV event queue on Windows.
             if window_created:
                 cv2.destroyWindow(window_name)
             cap.release()
@@ -610,7 +620,7 @@ def run_reconstruction(cfg: Dict[str, Any]) -> str:
         return "Real-time mode execution completed successfully."
 
     # ---------------------------------------------------------
-    # Invalid mode
+    # Unsupported mode
     # ---------------------------------------------------------
     else:
-        raise ValueError(f"无效的输入模式 {input_mode}，支持：'image_dir' / 'camera'")
+        raise ValueError(f"Invalid input_mode '{input_mode}'. Supported: 'image_dir', 'camera'.")
